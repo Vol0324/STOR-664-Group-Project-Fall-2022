@@ -23,3 +23,6 @@ final_dataset = merge(x = total_stats.noDuplicates, y = salary, by.x = "Player.n
   select(-c("Player.noaccent", "Rk", "Player.additional", "X", "Tm.x", "Tm.y")) %>%
   select("Player", "season17_18", everything()) %>%
   rename(salery = "season17_18")
+
+write.csv(final_dataset, "./Data/final_dataset.csv")
+
