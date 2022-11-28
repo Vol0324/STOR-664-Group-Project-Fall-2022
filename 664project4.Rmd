@@ -1,0 +1,151 @@
+---
+title: "664project4"
+author: "Peter (Tianzhu) Liu"
+date: '2022-11-27'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Data Cleaning
+```{r}
+data <- read.csv(file = '/Users/liutianzhu0104/Desktop/STOR-664-Group-Project-Fall-2022/final_dataset2.csv')
+data = data[data[,"G"] >= 30,]      #screen out less statistically significant data points
+data = data[data[,"Age"] >= 22,]    #salary cap 
+data_reduced = data[,c('X','Player', 'Pos', 'salary','Age','FG.','FT.','MPG','PPG','APG','RPG','TOPG','BPG','SPG')]
+data_reduced = data_reduced[-c(which(data_reduced$Pos == "SF-SG")),]
+```
+
+Split into train and test 80% and 20%
+```{r}
+set.seed(664)
+shuffle = sample.int(nrow(data_reduced))
+data_reduced$split = cut(shuffle, breaks = 5, labels = c("1","2","3","4","test"))
+train = subset(data_reduced, split != "test", select = -split)
+test = subset(data_reduced, split == "test", select = -split)
+data_reduced = subset(data_reduced, select = -split)
+```
+
+```{r}
+par(mfrow=c(1,3))
+hist(train$salary,freq = F, main = "Histogram of Salary", xlab = "Salary")
+hist(log(train$salary),freq = F, main = "Histogram of Log of Salary", xlab = "Log of Salary")
+hist(sqrt(train$salary),freq = F, main = "Histogram of Square Root of Salary", xlab = "Square Root of Salary of Salary")
+```
+
+```{r}
+model1 = lm(salary~Age+FG.+FT.+MPG+PPG+APG+RPG+TOPG+BPG+SPG, data = train)
+summary(model1)
+plot(model1)
+```
+
+```{r}
+model2 = lm(log(salary)~ Age+FG.+FT.+MPG+PPG+APG+RPG+TOPG+BPG+SPG, data = train)
+summary(model2)
+plot(model2)
+```
+
+```{r}
+model3 = lm(sqrt(salary)~Age+FG.+FT.+MPG+PPG+APG+RPG+TOPG+BPG+SPG, data = train)
+summary(model3)
+plot(model3)
+```
+
+Looking into different positions
+```{r}
+train_PG =  train[train[,3] == "PG", ]
+train_PF =  train[train[,3] == "PF", ]
+train_SF =  train[train[,3] == "SF", ]
+train_C = train[train[,3] == "C", ]
+train_SG = train[train[,3] == "SG", ]
+
+test_PG =  test[test[,3] == "PG", ]
+test_PF =  test[test[,3] == "PF", ]
+test_SF =  test[test[,3] == "SF", ]
+test_C = test[test[,3] == "C", ]
+test_SG = test[test[,3] == "SG", ]
+```
+
+First for the PG group,
+```{r}
+library(corrplot)
+corrplot(cor(train_PG[,-c(1,2,3)]), method = 'number')
+```
+
+```{r}
+par(mfrow=c(2,3))
+hist(train_PG$Age,freq = F, main = "Histogram of Age", xlab= "Age")
+hist(train_PG$FG.,freq = F, main = "Histogram of Filed Goals per Game", xlab= "Filed Goals per Game")
+hist(train_PG$FT.,freq = F, main = "Histogram of Free Throws per Game", xlab= "Free Throws per Game")
+hist(train_PG$MPG,freq = F, main = "Histogram of Minutes Played per Game", xlab= "Minutes Played per Game")
+hist(train_PG$PPG,freq = F, main = "Histogram of Points per Game", xlab= "Points per Game")
+hist(train_PG$APG,freq = F, main = "Histogram of Assits per Game", xlab= "Assits per Game")
+hist(train_PG$RPG,freq = F, main = "Histogram of Rebounds per Game", xlab= "Rebounds per Game")
+hist(train_PG$TOPG,freq = F, main = "Histogram of Turnovers per Game", xlab= "Turnovers per Game")
+hist(train_PG$BPG,freq = F, main = "Histogram of Blocks per Game", xlab= "Blocks per Game")
+hist(train_PG$SPG,freq = F, main = "Histogram of Steals per Game", xlab= "Steals per Game")
+```
+
+```{r}
+lm1 = lm(log(train_PG$salary)~Age+FG.+FT.+MPG+PPG+APG+RPG+TOPG+BPG+SPG,train_PG)
+summary(lm1)
+plot(lm1)
+```
+
+```{r}
+library(car)
+outlierTest(lm1)
+influencePlot(lm1)
+train2 = subset(train_PG,train_PG$X != 218 &train_PG$X != 314 & train_PG$X != 355 &train_PG$X != 376)
+```
+```{r}
+lm2 = lm(log(train2$salary)~Age+FG.+FT.+MPG+PPG+APG+RPG+TOPG+BPG+SPG,train2)
+summary(lm2)
+plot(lm2)
+```
+
+
+```{r}
+#AIC and Mallow's Cp select model yields the same model 
+library(leaps)
+b = regsubsets(log(salary)~Age+FG.+FT.+MPG+PPG+APG+RPG+TOPG+BPG+SPG, data = train2)
+rs = summary(b)
+plot(2:9,rs$cp, ylab = "CP statistic", xlab = "Number of Parameters")
+abline(0,1)
+rs$which[which.min(rs$cp),]
+#step(lm2)
+lm3 = lm(log(salary)~Age+FT.+MPG,train2)
+summary(lm3)
+plot(lm3)
+```
+
+```{r}
+#no sign of heteroscedasticity
+library(lmtest)
+bptest(lm3, ~ Age*FT.*MPG + I(Age^2) + I(FT.^2) + I(MPG^2), data = train2)
+```
+
+```{r}
+#not transform a low p-value of heteroscedasticity
+lm4 = lm(salary~Age+FT.+MPG,train2)
+bptest(lm4, ~ Age*FT.*MPG + I(Age^2) + I(FT.^2) + I(MPG^2), data = train2)
+```
+
+
+```{r}
+#no sign of multicollinearity 
+library(car)
+vif(lm3)
+```
+
+
+```{r}
+#compare rmse for original model and reduced model 
+rmse=function(x,y){sqrt(mean((x-y)^2))}
+rmse(predict(lm2,test_PG),log(test_PG$salary))
+rmse(predict(lm3,test_PG),log(test_PG$salary))
+predict(lm3, test_PG, interval="predict")
+```
+
